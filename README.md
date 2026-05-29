@@ -2,6 +2,8 @@
 
 > AI-powered social media automation platform. Paste an article URL, get publish-ready LinkedIn and Telegram posts in seconds — with one-click publishing to your connected accounts.
 
+### 🌐 Live Demo: [omni-social.vercel.app](https://omni-social.vercel.app)
+
 ---
 
 ## What it does
@@ -27,6 +29,7 @@
 | AI | Groq API (LLaMA 3) |
 | AI Images | Pollinations AI |
 | LinkedIn OAuth | LinkedIn OAuth 2.0 |
+| Hosting | Vercel |
 
 ---
 
@@ -86,7 +89,7 @@ VITE_N8N_LINKEDIN_PUBLISH_URL=https://your-n8n.app.n8n.cloud/webhook/publish-lin
 
 # LinkedIn OAuth
 VITE_LINKEDIN_CLIENT_ID=
-VITE_LINKEDIN_REDIRECT_URI=http://localhost:5173/linkedin/callback
+VITE_LINKEDIN_REDIRECT_URI=https://omni-social.vercel.app/linkedin/callback
 ```
 
 ---
@@ -189,19 +192,11 @@ Webhook
         TRUE  └─► Telegram node (Send Photo — binary upload)
                     Caption: {{ $json.body.telegram }}
         FALSE └─► IF: $json.body.imageUrl is not empty?
-                    TRUE  └─► HTTP Request (Telegram sendPhoto with URL)
-                    FALSE └─► HTTP Request (Telegram sendMessage — text only)
+                    TRUE  └─► Telegram node (Send Photo with URL)
+                    FALSE └─► Telegram node (Send Message — text only)
 ```
 
-**Telegram sendPhoto (URL) request:**
-```
-POST https://api.telegram.org/bot{{ $json.body.botToken }}/sendPhoto
-{
-  "chat_id": "{{ $json.body.channelId }}",
-  "photo": "{{ $json.body.imageUrl }}",
-  "caption": "{{ $json.body.telegram }}"
-}
-```
+> ⚠️ Use n8n's native **Telegram node** instead of HTTP Request nodes to avoid JSON serialisation issues with multi-line text.
 
 ---
 
@@ -213,7 +208,7 @@ POST https://api.telegram.org/bot{{ $json.body.botToken }}/sendPhoto
 ```json
 {
   "code": "AQT...",
-  "redirectUri": "http://localhost:5173/linkedin/callback"
+  "redirectUri": "https://omni-social.vercel.app/linkedin/callback"
 }
 ```
 
@@ -250,9 +245,9 @@ Webhook
 
 | Field | Type | Description |
 |---|---|---|
-| `postType` | `"text"` \| `"ai-image"` \| `"image"` | Routing signal |
+| `postType` | `"text"` \| `"ai-image"` \| `"image"` | Routing signal for n8n IF node |
 | `linkedin` | string | Post text content |
-| `hashtags` | JSON string | `'["#AI","#Tech"]'` — must be parsed |
+| `hashtags` | JSON string | `'["#AI","#Tech"]'` — parse with `JSON.parse()` in n8n |
 | `accessToken` | string | LinkedIn OAuth token |
 | `personId` | string | LinkedIn person ID (not full URN) |
 | `imageUrl` | string (optional) | For `ai-image` postType |
@@ -261,15 +256,15 @@ Webhook
 **Flow:**
 ```
 Webhook
-  └─► IF: postType === "text"
+  └─► IF: $json.body.postType === "text"
         TRUE  └─► HTTP Request (LinkedIn ugcPosts — text only)
-        FALSE └─► IF: postType === "image" AND binary imageFile exists?
-                    TRUE  └─► LinkedIn Register Upload (assets?action=registerUpload)
+        FALSE └─► IF: $json.body.postType === "image" AND $binary.imageFile exists?
+                    TRUE  └─► LinkedIn Register Upload
                                 └─► HTTP Request (upload binary to uploadUrl)
                                       └─► HTTP Request (ugcPost with asset URN)
                     FALSE └─► HTTP Request (download imageUrl)
                                 └─► LinkedIn Register Upload
-                                      └─► HTTP Request (upload downloaded image)
+                                      └─► HTTP Request (upload image)
                                             └─► HTTP Request (ugcPost with asset URN)
 ```
 
@@ -281,7 +276,7 @@ Webhook
   "specificContent": {
     "com.linkedin.ugc.ShareContent": {
       "shareCommentary": {
-        "text": "{{ $json.body.linkedin }}\n\n{{ $json.body.hashtags | join(' ') }}"
+        "text": "{{ $json.body.linkedin }}"
       },
       "shareMediaCategory": "NONE"
     }
@@ -301,12 +296,7 @@ Webhook
     "com.linkedin.ugc.ShareContent": {
       "shareCommentary": { "text": "{{ $json.body.linkedin }}" },
       "shareMediaCategory": "IMAGE",
-      "media": [
-        {
-          "status": "READY",
-          "media": "{{ assetUrn }}"
-        }
-      ]
+      "media": [{ "status": "READY", "media": "{{ assetUrn }}" }]
     }
   },
   "visibility": {
@@ -318,8 +308,6 @@ Webhook
 ---
 
 ## Image Source Selector
-
-The frontend lets users choose from four image sources before publishing:
 
 | Option | Behaviour | Sent to n8n |
 |---|---|---|
@@ -334,19 +322,15 @@ The frontend lets users choose from four image sources before publishing:
 
 ```
 User clicks "Connect LinkedIn"
-  └─► Frontend redirects to:
-        https://www.linkedin.com/oauth/v2/authorization
-          ?response_type=code
-          &client_id=YOUR_CLIENT_ID
-          &redirect_uri=http://localhost:5173/linkedin/callback
-          &scope=openid profile email w_member_social
+  └─► Redirect to LinkedIn OAuth authorization URL
+        scope: openid profile email w_member_social
 
-LinkedIn redirects to /linkedin/callback?code=AQT...
+LinkedIn redirects to:
+  https://omni-social.vercel.app/linkedin/callback?code=AQT...
   └─► Frontend POSTs code to n8n /webhook/linkedin-token
-        └─► n8n exchanges code for accessToken + fetches personId
-              └─► Frontend saves { accessToken, personId, connected: true }
-                    to Firestore userSettings/{uid}.linkedin
-                      └─► Redirect to /dashboard
+        └─► n8n exchanges code → accessToken + personId
+              └─► Saved to Firestore userSettings/{uid}.linkedin
+                    └─► Redirect to /dashboard
 ```
 
 ---
@@ -376,8 +360,6 @@ LinkedIn redirects to /linkedin/callback?code=AQT...
   "hashtags": ["#AI", "#Automation"],
   "articleImage": "https://example.com/og.jpg",
   "aiImage": "https://image.pollinations.ai/prompt/...",
-  "linkedinApproved": false,
-  "telegramApproved": false,
   "createdAt": 1716000000000,
   "dateLabel": "May 18, 02:30 PM"
 }
@@ -390,8 +372,12 @@ LinkedIn redirects to /linkedin/callback?code=AQT...
 1. Create a project at [console.firebase.google.com](https://console.firebase.google.com)
 2. Enable **Authentication → Email/Password**
 3. Enable **Firestore Database**
-4. Add your web app and copy the config values to `.env`
-5. Set Firestore rules:
+4. Add your web app and copy config values to `.env`
+5. Go to **Authentication → Settings → Authorized domains** and add:
+   ```
+   omni-social.vercel.app
+   ```
+6. Set Firestore security rules:
 
 ```
 rules_version = '2';
@@ -413,16 +399,52 @@ service cloud.firestore {
 ## LinkedIn App Setup
 
 1. Go to [linkedin.com/developers](https://www.linkedin.com/developers/)
-2. Create an app and add the **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products
-3. Add `http://localhost:5173/linkedin/callback` to Authorized Redirect URLs
-4. Copy the Client ID to `VITE_LINKEDIN_CLIENT_ID` in `.env`
-5. Store the Client Secret securely in your n8n credentials (never in the frontend)
+2. Create an app — add **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products
+3. Under **Auth → Authorized Redirect URLs** add:
+   ```
+   https://omni-social.vercel.app/linkedin/callback
+   http://localhost:5173/linkedin/callback
+   ```
+4. Copy Client ID to `VITE_LINKEDIN_CLIENT_ID` in `.env`
+5. Store Client Secret in n8n credentials only — never in the frontend
+
+---
+
+## Deploying to Vercel
+
+### Step 1 — Push to GitHub
+```bash
+git init && git add . && git commit -m "initial commit"
+git remote add origin https://github.com/YOUR_USERNAME/omnisocial.git
+git push -u origin main
+```
+
+### Step 2 — Import on Vercel
+1. Go to [vercel.com/new](https://vercel.com/new) → Import your repo
+2. Framework auto-detected as **Vite** — leave defaults
+
+### Step 3 — Add Environment Variables
+Add all variables from `.env` in Vercel project → **Settings → Environment Variables**.
+Set `VITE_LINKEDIN_REDIRECT_URI` to:
+```
+https://omni-social.vercel.app/linkedin/callback
+```
+
+### Step 4 — Deploy
+Click **Deploy**. Live in ~60 seconds at **[omni-social.vercel.app](https://omni-social.vercel.app)**
+
+### Step 5 — Post-deploy checklist
+- [ ] Add `omni-social.vercel.app` to Firebase Authorized Domains
+- [ ] Add production redirect URI to LinkedIn app
+- [ ] Set CORS on n8n publish webhooks to allow `https://omni-social.vercel.app`
+- [ ] Re-enter Telegram settings on production site
+- [ ] Reconnect LinkedIn on production site
 
 ---
 
 ## Known Limitations
 
 - LinkedIn access tokens expire after 60 days — reconnect via the LinkedIn Settings button
-- Uploaded custom images are sent as binary to n8n; n8n must handle the LinkedIn asset upload
+- Multi-line AI-generated text can break n8n JSON body nodes — use native Telegram/HTTP nodes with field mode instead of raw JSON
 - PDF/DOCX file upload in the generate form is UI-only (generates mock content)
 - Article image extraction depends on the target site having proper OG meta tags
