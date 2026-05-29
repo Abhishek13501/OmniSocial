@@ -38,11 +38,11 @@ const Navbar = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-6">
-            <a href="#features" className="text-sm font-medium text-slate-300 hover:text-white transition-colors duration-150">
+            <a
+              href="/#features"
+              className="text-sm font-medium text-slate-300 hover:text-white transition-colors duration-150"
+            >
               Features
-            </a>
-            <a href="#pricing" className="text-sm font-medium text-slate-300 hover:text-white transition-colors duration-150">
-              Pricing
             </a>
             
             {user ? (
@@ -98,18 +98,11 @@ const Navbar = () => {
         <div className="md:hidden border-b border-darkborder bg-darkcard/95 backdrop-blur-lg animate-fade-in">
           <div className="space-y-1.5 px-4 pb-4 pt-2">
             <a
-              href="#features"
+              href="/#features"
               onClick={() => setMobileMenuOpen(false)}
               className="block rounded-lg px-3 py-2.5 text-base font-medium text-slate-300 hover:bg-slate-900/60 hover:text-white"
             >
               Features
-            </a>
-            <a
-              href="#pricing"
-              onClick={() => setMobileMenuOpen(false)}
-              className="block rounded-lg px-3 py-2.5 text-base font-medium text-slate-300 hover:bg-slate-900/60 hover:text-white"
-            >
-              Pricing
             </a>
 
             {user ? (
