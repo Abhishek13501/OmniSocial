@@ -6,6 +6,25 @@
 
 ---
 
+## Screenshots
+
+### Login
+![Login](screenshots/login.png)
+
+### Dashboard
+![Dashboard](screenshots/dashboard.png)
+
+### Telegram Settings
+![Telegram Settings](screenshots/telegram-settings.png)
+
+### LinkedIn Settings
+![LinkedIn Settings](screenshots/linkedin-settings.png)
+
+### Image Source
+![Image Source](screenshots/image-source.png)
+
+---
+
 ## What it does
 
 1. User pastes an article URL
