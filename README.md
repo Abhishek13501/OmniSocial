@@ -5,6 +5,11 @@
 ### 🌐 Live Demo: [omni-social.vercel.app](https://omni-social.vercel.app)
 
 ---
+## 🎥 Demo Video
+
+[▶ Watch Full Demo](./demo.mp4)
+
+---
 
 ## Screenshots
 
